@@ -3,6 +3,7 @@
 #include <GLES2/gl2.h>
 #include <unistd.h>
 #include <math.h>
+#include <stdbool.h>
 
 #define WIDTH  480
 #define HEIGHT 800
@@ -20,11 +21,11 @@ const char *fs_src =
 "  gl_FragColor = vec4(0.2, 0.8, 1.0, 1.0);\n"
 "}\n";
 
-GLuint compile(GLenum type, const char *src) {
-    GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, NULL);
-    glCompileShader(s);
-    return s;
+GLuint compile(GLenum t, const char *s) {
+    GLuint sh = glCreateShader(t);
+    glShaderSource(sh, 1, &s, NULL);
+    glCompileShader(sh);
+    return sh;
 }
 
 /* column-major math */
@@ -39,19 +40,19 @@ void mat4_translate(float *m, float z) {
     m[14] = z;
 }
 
-void mat4_rotate_y(float *m, float a) {
-    mat4_identity(m);
-    m[0]  =  cosf(a);
-    m[2]  = -sinf(a);
-    m[8]  =  sinf(a);
-    m[10] =  cosf(a);
-}
-
 void mat4_rotate_x(float *m, float a) {
     mat4_identity(m);
     m[5]  =  cosf(a);
     m[6]  =  sinf(a);
     m[9]  = -sinf(a);
+    m[10] =  cosf(a);
+}
+
+void mat4_rotate_y(float *m, float a) {
+    mat4_identity(m);
+    m[0]  =  cosf(a);
+    m[2]  = -sinf(a);
+    m[8]  =  sinf(a);
     m[10] =  cosf(a);
 }
 
@@ -77,11 +78,21 @@ void mat4_mul(float *o, float *a, float *b) {
 
 int main() {
     Display *xd = XOpenDisplay(NULL);
+    int scr = DefaultScreen(xd);
+
     Window win = XCreateSimpleWindow(
-        xd, DefaultRootWindow(xd),
+        xd, RootWindow(xd, scr),
         0, 0, WIDTH, HEIGHT, 0,
-        0, 0
+        BlackPixel(xd, scr),
+        WhitePixel(xd, scr)
     );
+
+    XSelectInput(xd, win,
+        ButtonPressMask |
+        ButtonReleaseMask |
+        PointerMotionMask
+    );
+
     XMapWindow(xd, win);
 
     EGLDisplay ed = eglGetDisplay((EGLNativeDisplayType)xd);
@@ -147,13 +158,38 @@ int main() {
     mat4_perspective(proj, 1.0f, (float)WIDTH/HEIGHT, 0.1f, 50.0f);
     mat4_translate(view, -4.0f);
 
-    float t = 0.0f;
+    bool dragging = false;
+    int last_x = 0, last_y = 0;
+    float rot_x = 0.0f, rot_y = 0.0f;
 
     while (1) {
-        t += 0.015f;
+        while (XPending(xd)) {
+            XEvent e;
+            XNextEvent(xd, &e);
 
-        mat4_rotate_y(ry, t);
-        mat4_rotate_x(rx, t * 0.7f);
+            if (e.type == ButtonPress) {
+                dragging = true;
+                last_x = e.xbutton.x;
+                last_y = e.xbutton.y;
+            }
+
+            if (e.type == ButtonRelease) {
+                dragging = false;
+            }
+
+            if (e.type == MotionNotify && dragging) {
+                int dx = e.xmotion.x - last_x;
+                int dy = e.xmotion.y - last_y;
+                last_x = e.xmotion.x;
+                last_y = e.xmotion.y;
+
+                rot_y += dx * 0.01f;
+                rot_x += dy * 0.01f;
+            }
+        }
+
+        mat4_rotate_y(ry, rot_y);
+        mat4_rotate_x(rx, rot_x);
         mat4_mul(tmp, ry, rx);
         mat4_mul(tmp, view, tmp);
         mat4_mul(mvp, proj, tmp);
