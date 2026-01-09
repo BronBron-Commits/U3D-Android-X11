@@ -107,7 +107,6 @@ void draw_cube(GLint uMVP,float *proj,float *view,float *world,float *model){
 int main(){
     Display *xd=XOpenDisplay(NULL);
     Window win=XCreateSimpleWindow(xd,DefaultRootWindow(xd),0,0,WIDTH,HEIGHT,0,0,0);
-
     XSelectInput(xd,win,ButtonPressMask|ButtonReleaseMask|PointerMotionMask);
     XMapWindow(xd,win);
 
@@ -133,7 +132,6 @@ int main(){
     glUseProgram(prog);
 
     float verts[] = {
-        /* same colored cube data */
         -0.5,-0.5,0.5,1,0,0,  0.5,-0.5,0.5,1,0,0,  0.5,0.5,0.5,1,0,0,
         -0.5,-0.5,0.5,1,0,0,  0.5,0.5,0.5,1,0,0, -0.5,0.5,0.5,1,0,0,
         -0.5,-0.5,-0.5,0,1,0, -0.5,0.5,-0.5,0,1,0,  0.5,0.5,-0.5,0,1,0,
@@ -166,15 +164,35 @@ int main(){
     mat4_perspective(proj,1.0f,(float)WIDTH/HEIGHT,0.1f,50);
     mat4_translate(view,0,0,-6);
 
-    float world[16],rx[16],ry[16],tmp[16];
+    float world[16],rx[16],ry[16];
     float rot_x=0,rot_y=0,vel_x=0,vel_y=0;
     bool dragging=false; int lx=0,ly=0;
 
-    float torso[16],head[16],tmp2[16];
+    /* body parts */
+    float torso[16], head[16], armL[16], armR[16], legL[16], legR[16];
+    float tmp[16];
+
     mat4_scale(torso,0.8f,1.2f,0.4f);
+
     mat4_translate(head,0,1.1f,0);
-    mat4_scale(tmp2,0.4f,0.4f,0.4f);
-    mat4_mul(head,head,tmp2);
+    mat4_scale(tmp,0.4f,0.4f,0.4f);
+    mat4_mul(head,head,tmp);
+
+    mat4_translate(armL,-0.7f,0.3f,0);
+    mat4_scale(tmp,0.25f,0.8f,0.25f);
+    mat4_mul(armL,armL,tmp);
+
+    mat4_translate(armR,0.7f,0.3f,0);
+    mat4_scale(tmp,0.25f,0.8f,0.25f);
+    mat4_mul(armR,armR,tmp);
+
+    mat4_translate(legL,-0.3f,-1.2f,0);
+    mat4_scale(tmp,0.3f,0.9f,0.3f);
+    mat4_mul(legL,legL,tmp);
+
+    mat4_translate(legR,0.3f,-1.2f,0);
+    mat4_scale(tmp,0.3f,0.9f,0.3f);
+    mat4_mul(legR,legR,tmp);
 
     while(1){
         while(XPending(xd)){
@@ -204,6 +222,10 @@ int main(){
 
         draw_cube(uMVP,proj,view,world,torso);
         draw_cube(uMVP,proj,view,world,head);
+        draw_cube(uMVP,proj,view,world,armL);
+        draw_cube(uMVP,proj,view,world,armR);
+        draw_cube(uMVP,proj,view,world,legL);
+        draw_cube(uMVP,proj,view,world,legR);
 
         eglSwapBuffers(ed,surf);
         usleep(16000);
