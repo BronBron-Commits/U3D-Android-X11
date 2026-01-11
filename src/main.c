@@ -93,6 +93,28 @@ void mat4_perspective(float *m,float fov,float asp,float n,float f){
     m[14]=-(2*f*n)/(f-n);
 }
 
+/* ================= DRAW ================= */
+
+void draw_cube(GLint uMVP,GLint uWorld,
+               float *proj,float *view,float *model){
+    float t2[16],mvp[16];
+    mat4_mul(t2,view,model);
+    mat4_mul(mvp,proj,t2);
+    glUniformMatrix4fv(uWorld,1,GL_FALSE,model);
+    glUniformMatrix4fv(uMVP,1,GL_FALSE,mvp);
+    glDrawArrays(GL_TRIANGLES,0,36);
+}
+
+/* ================= AGENT ================= */
+
+typedef struct{
+    float x,y;
+    float rot;
+    float rot_vel;
+} Agent;
+
+Agent agents[NUM_AGENTS];
+
 /* ================= GL ================= */
 
 GLuint compile(GLenum t,const char *s){
@@ -101,15 +123,6 @@ GLuint compile(GLenum t,const char *s){
     glCompileShader(sh);
     return sh;
 }
-
-/* ================= AGENT ================= */
-
-typedef struct{
-    float x,y;
-    float rot,rot_vel;
-} Agent;
-
-Agent agents[NUM_AGENTS];
 
 /* ================= MAIN ================= */
 
@@ -142,29 +155,25 @@ int main(){
     glLinkProgram(prog);
     glUseProgram(prog);
 
+    /* ----- cube geometry ----- */
     float cube[]={
-        -0.5,-0.5,0.5,1,0,0,0,0,1,  0.5,-0.5,0.5,0,1,0,0,0,1,  0.5,0.5,0.5,0,0,1,0,0,1,
-        -0.5,-0.5,0.5,1,0,0,0,0,1,  0.5,0.5,0.5,0,0,1,0,0,1, -0.5,0.5,0.5,1,1,0,0,0,1,
-
-        -0.5,-0.5,-0.5,1,0,1,0,0,-1, -0.5,0.5,-0.5,0,1,1,0,0,-1, 0.5,0.5,-0.5,1,1,1,0,0,-1,
-        -0.5,-0.5,-0.5,1,0,1,0,0,-1,  0.5,0.5,-0.5,1,1,1,0,0,-1, 0.5,-0.5,-0.5,0,1,0,0,0,-1,
-
-        -0.5,-0.5,-0.5,1,0,0,-1,0,0, -0.5,-0.5,0.5,0,1,0,-1,0,0, -0.5,0.5,0.5,0,0,1,-1,0,0,
-        -0.5,-0.5,-0.5,1,0,0,-1,0,0, -0.5,0.5,0.5,0,0,1,-1,0,0, -0.5,0.5,-0.5,1,1,0,-1,0,0,
-
-         0.5,-0.5,-0.5,1,0,1,1,0,0,  0.5,0.5,-0.5,0,1,1,1,0,0,  0.5,0.5,0.5,1,1,1,1,0,0,
-         0.5,-0.5,-0.5,1,0,1,1,0,0,  0.5,0.5,0.5,1,1,1,1,0,0,  0.5,-0.5,0.5,0,1,0,1,0,0,
-
-        -0.5,0.5,-0.5,1,0,0,0,1,0, -0.5,0.5,0.5,0,1,0,0,1,0,  0.5,0.5,0.5,0,0,1,0,1,0,
-        -0.5,0.5,-0.5,1,0,0,0,1,0,  0.5,0.5,0.5,0,0,1,0,1,0,  0.5,0.5,-0.5,1,1,0,0,1,0,
-
-        -0.5,-0.5,-0.5,1,0,1,0,-1,0, 0.5,-0.5,-0.5,0,1,1,0,-1,0, 0.5,-0.5,0.5,1,1,1,0,-1,0,
-        -0.5,-0.5,-0.5,1,0,1,0,-1,0, 0.5,-0.5,0.5,1,1,1,0,-1,0, -0.5,-0.5,0.5,0,1,0,0,-1,0
+        -0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,0.5,0.5,1,0,0,0,0,1,
+        -0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,0.5,0.5,1,0,0,0,0,1,  -0.5,0.5,0.5,1,0,0,0,0,1,
+        -0.5,-0.5,-0.5,0,1,0,0,0,-1, -0.5,0.5,-0.5,0,1,0,0,0,-1, 0.5,0.5,-0.5,0,1,0,0,0,-1,
+        -0.5,-0.5,-0.5,0,1,0,0,0,-1,  0.5,0.5,-0.5,0,1,0,0,0,-1, 0.5,-0.5,-0.5,0,1,0,0,0,-1,
+        -0.5,-0.5,-0.5,0,0,1,-1,0,0, -0.5,-0.5,0.5,0,0,1,-1,0,0, -0.5,0.5,0.5,0,0,1,-1,0,0,
+        -0.5,-0.5,-0.5,0,0,1,-1,0,0, -0.5,0.5,0.5,0,0,1,-1,0,0, -0.5,0.5,-0.5,0,0,1,-1,0,0,
+         0.5,-0.5,-0.5,1,1,0,1,0,0,  0.5,0.5,-0.5,1,1,0,1,0,0,  0.5,0.5,0.5,1,1,0,1,0,0,
+         0.5,-0.5,-0.5,1,1,0,1,0,0,  0.5,0.5,0.5,1,1,0,1,0,0,  0.5,-0.5,0.5,1,1,0,1,0,0,
+        -0.5,0.5,-0.5,0,1,1,0,1,0, -0.5,0.5,0.5,0,1,1,0,1,0,  0.5,0.5,0.5,0,1,1,0,1,0,
+        -0.5,0.5,-0.5,0,1,1,0,1,0,  0.5,0.5,0.5,0,1,1,0,1,0,  0.5,0.5,-0.5,0,1,1,0,1,0,
+        -0.5,-0.5,-0.5,1,0,1,0,-1,0, 0.5,-0.5,-0.5,1,0,1,0,-1,0, 0.5,-0.5,0.5,1,0,1,0,-1,0,
+        -0.5,-0.5,-0.5,1,0,1,0,-1,0, 0.5,-0.5,0.5,1,0,1,0,-1,0,-0.5,-0.5,0.5,1,0,1,0,-1,0
     };
 
-    GLuint cube_vbo;
-    glGenBuffers(1,&cube_vbo);
-    glBindBuffer(GL_ARRAY_BUFFER,cube_vbo);
+    GLuint vbo;
+    glGenBuffers(1,&vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,vbo);
     glBufferData(GL_ARRAY_BUFFER,sizeof(cube),cube,GL_STATIC_DRAW);
 
     glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)0);
@@ -174,24 +183,15 @@ int main(){
     glEnableVertexAttribArray(1);
     glEnableVertexAttribArray(2);
 
-    float grid[]={
-        -5,0,0,1,0,0, 5,0,0,1,0,0,
-        0,-5,0,0,1,0, 0,5,0,0,1,0,
-        0,0,-5,0,0,1, 0,0,5,0,0,1
-    };
-
-    GLuint grid_vbo;
-    glGenBuffers(1,&grid_vbo);
-    glBindBuffer(GL_ARRAY_BUFFER,grid_vbo);
-    glBufferData(GL_ARRAY_BUFFER,sizeof(grid),grid,GL_STATIC_DRAW);
-
     GLint uMVP=glGetUniformLocation(prog,"uMVP");
     GLint uWorld=glGetUniformLocation(prog,"uWorld");
 
-    float proj[16],view[16],tmp[16],rx[16],ry[16],tr[16];
+    float proj[16],view[16];
     mat4_perspective(proj,1.1f,(float)WIDTH/HEIGHT,0.1f,50);
+
+    float rx[16],ry[16],tr[16],tmp[16];
     mat4_rotate_x(rx,-0.6f);
-    mat4_rotate_y(ry,0.6f);
+    mat4_rotate_y(ry, 0.6f);
     mat4_translate(tr,0,-0.6f,-7.5f);
     mat4_mul(tmp,ry,rx);
     mat4_mul(view,tr,tmp);
@@ -200,6 +200,18 @@ int main(){
     agents[1].x= 1.3f; agents[1].y=0;
 
     int grabbed=-1,last_x=0,last_y=0;
+
+    /* ----- grid geometry ----- */
+    float grid[]={
+        -5,0,0, 1,0,0,   5,0,0, 1,0,0,
+         0,-5,0, 0,1,0,  0,5,0, 0,1,0,
+         0,0,-5, 0,0,1,  0,0,5, 0,0,1
+    };
+
+    GLuint grid_vbo;
+    glGenBuffers(1,&grid_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,grid_vbo);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(grid),grid,GL_STATIC_DRAW);
 
     while(1){
         while(XPending(xd)){
@@ -220,8 +232,13 @@ int main(){
             if(e.type==MotionNotify && grabbed!=-1){
                 int dx=e.xmotion.x-last_x;
                 last_x=e.xmotion.x;
+                last_y=e.xmotion.y;
                 agents[grabbed].x=wx;
                 agents[grabbed].y=wy;
+                if(agents[grabbed].x<LEFT_BOUND) agents[grabbed].x=LEFT_BOUND;
+                if(agents[grabbed].x>RIGHT_BOUND) agents[grabbed].x=RIGHT_BOUND;
+                if(agents[grabbed].y<BOTTOM_BOUND) agents[grabbed].y=BOTTOM_BOUND;
+                if(agents[grabbed].y>TOP_BOUND) agents[grabbed].y=TOP_BOUND;
                 agents[grabbed].rot_vel+=dx*ROT_SENS;
             }
         }
@@ -234,40 +251,35 @@ int main(){
         glClearColor(0.05f,0.05f,0.08f,1);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
-        float ident[16]; mat4_identity(ident);
-        float t2[16],mvp_grid[16];
-        mat4_mul(t2,view,ident);
-        mat4_mul(mvp_grid,proj,t2);
-
+        /* draw grid */
         glBindBuffer(GL_ARRAY_BUFFER,grid_vbo);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)0);
         glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)(3*sizeof(float)));
         glDisableVertexAttribArray(2);
+
+        float ident[16],gv[16],gmvp[16];
+        mat4_identity(ident);
+        mat4_mul(gv,view,ident);
+        mat4_mul(gmvp,proj,gv);
         glUniformMatrix4fv(uWorld,1,GL_FALSE,ident);
-        glUniformMatrix4fv(uMVP,1,GL_FALSE,mvp_grid);
+        glUniformMatrix4fv(uMVP,1,GL_FALSE,gmvp);
         glDrawArrays(GL_LINES,0,6);
 
-        glBindBuffer(GL_ARRAY_BUFFER,cube_vbo);
+        /* restore cube state */
+        glBindBuffer(GL_ARRAY_BUFFER,vbo);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)0);
         glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(3*sizeof(float)));
         glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(6*sizeof(float)));
         glEnableVertexAttribArray(2);
 
         for(int i=0;i<NUM_AGENTS;i++){
-            float root[16],rotm[16],scale[16],tmp2[16],model[16];
+            float root[16],rot[16],scale[16],tmp2[16],model[16];
             mat4_translate(root,agents[i].x,agents[i].y,0);
-            mat4_rotate_y(rotm,agents[i].rot);
+            mat4_rotate_y(rot,agents[i].rot);
             mat4_scale(scale,0.8f,1.2f,0.8f);
-            mat4_mul(tmp2,rotm,scale);
+            mat4_mul(tmp2,rot,scale);
             mat4_mul(model,root,tmp2);
-
-            float t1[16],t3[16],mvp[16];
-            mat4_mul(t1,root,model);
-            mat4_mul(t3,view,t1);
-            mat4_mul(mvp,proj,t3);
-            glUniformMatrix4fv(uWorld,1,GL_FALSE,t1);
-            glUniformMatrix4fv(uMVP,1,GL_FALSE,mvp);
-            glDrawArrays(GL_TRIANGLES,0,36);
+            draw_cube(uMVP,uWorld,proj,view,model);
         }
 
         eglSwapBuffers(ed,surf);
