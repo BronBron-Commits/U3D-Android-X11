@@ -39,6 +39,7 @@ const char *fs_src =
 "precision mediump float;\n"
 "varying vec3 vColor;\n"
 "varying vec3 vNormal;\n"
+"uniform float uSelected;\n"
 "void main(){\n"
 "  vec3 N = normalize(vNormal);\n"
 "  vec3 L = normalize(vec3(-0.4,-1.0,-0.6));\n"
@@ -46,8 +47,9 @@ const char *fs_src =
 "  float d = max(dot(N,-L),0.0);\n"
 "  vec3 H = normalize(-L+V);\n"
 "  float s = pow(max(dot(N,H),0.0),24.0);\n"
-"  vec3 col = vColor*(0.25+d*0.75) + vec3(s*0.35);\n"
-"  gl_FragColor = vec4(col,1.0);\n"
+"  vec3 base = vColor*(0.25+d*0.75) + vec3(s*0.35);\n"
+"  vec3 highlight = mix(base, vec3(1.0,1.0,0.3), uSelected);\n"
+"  gl_FragColor = vec4(highlight,1.0);\n"
 "}\n";
 
 /* ================= MATH ================= */
@@ -155,6 +157,10 @@ int main(){
     glLinkProgram(prog);
     glUseProgram(prog);
 
+    GLint uMVP=glGetUniformLocation(prog,"uMVP");
+    GLint uWorld=glGetUniformLocation(prog,"uWorld");
+    GLint uSelected=glGetUniformLocation(prog,"uSelected");
+
     /* ----- cube geometry ----- */
     float cube[]={
         -0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,0.5,0.5,1,0,0,0,0,1,
@@ -183,8 +189,17 @@ int main(){
     glEnableVertexAttribArray(1);
     glEnableVertexAttribArray(2);
 
-    GLint uMVP=glGetUniformLocation(prog,"uMVP");
-    GLint uWorld=glGetUniformLocation(prog,"uWorld");
+    /* ----- grid geometry ----- */
+    float grid[]={
+        -5,0,0, 0.8,0.2,0.2,  5,0,0, 0.8,0.2,0.2,
+         0,-5,0, 0.2,0.8,0.2, 0,5,0, 0.2,0.8,0.2,
+         0,0,-5, 0.2,0.2,0.8, 0,0,5, 0.2,0.2,0.8
+    };
+
+    GLuint grid_vbo;
+    glGenBuffers(1,&grid_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,grid_vbo);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(grid),grid,GL_STATIC_DRAW);
 
     float proj[16],view[16];
     mat4_perspective(proj,1.1f,(float)WIDTH/HEIGHT,0.1f,50);
@@ -199,19 +214,7 @@ int main(){
     agents[0].x=-1.3f; agents[0].y=0;
     agents[1].x= 1.3f; agents[1].y=0;
 
-    int grabbed=-1,last_x=0,last_y=0;
-
-    /* ----- grid geometry ----- */
-    float grid[]={
-        -5,0,0, 1,0,0,   5,0,0, 1,0,0,
-         0,-5,0, 0,1,0,  0,5,0, 0,1,0,
-         0,0,-5, 0,0,1,  0,0,5, 0,0,1
-    };
-
-    GLuint grid_vbo;
-    glGenBuffers(1,&grid_vbo);
-    glBindBuffer(GL_ARRAY_BUFFER,grid_vbo);
-    glBufferData(GL_ARRAY_BUFFER,sizeof(grid),grid,GL_STATIC_DRAW);
+    int grabbed=-1, selected=-1, last_x=0, last_y=0;
 
     while(1){
         while(XPending(xd)){
@@ -222,17 +225,23 @@ int main(){
             if(e.type==ButtonPress){
                 last_x=e.xbutton.x;
                 last_y=e.xbutton.y;
-                for(int i=0;i<NUM_AGENTS;i++)
+                selected=-1;
+                grabbed=-1;
+                for(int i=0;i<NUM_AGENTS;i++){
                     if(fabsf(wx-agents[i].x)<PICK_RADIUS &&
-                       fabsf(wy-agents[i].y)<PICK_RADIUS)
+                       fabsf(wy-agents[i].y)<PICK_RADIUS){
+                        selected=i;
                         grabbed=i;
+                        break;
+                    }
+                }
             }
+
             if(e.type==ButtonRelease) grabbed=-1;
 
             if(e.type==MotionNotify && grabbed!=-1){
                 int dx=e.xmotion.x-last_x;
                 last_x=e.xmotion.x;
-                last_y=e.xmotion.y;
                 agents[grabbed].x=wx;
                 agents[grabbed].y=wy;
                 if(agents[grabbed].x<LEFT_BOUND) agents[grabbed].x=LEFT_BOUND;
@@ -256,8 +265,9 @@ int main(){
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)0);
         glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)(3*sizeof(float)));
         glDisableVertexAttribArray(2);
+        glUniform1f(uSelected,0.0f);
 
-        float ident[16],gv[16],gmvp[16];
+        float ident[16], gv[16], gmvp[16];
         mat4_identity(ident);
         mat4_mul(gv,view,ident);
         mat4_mul(gmvp,proj,gv);
@@ -279,6 +289,7 @@ int main(){
             mat4_scale(scale,0.8f,1.2f,0.8f);
             mat4_mul(tmp2,rot,scale);
             mat4_mul(model,root,tmp2);
+            glUniform1f(uSelected,(i==selected)?1.0f:0.0f);
             draw_cube(uMVP,uWorld,proj,view,model);
         }
 
